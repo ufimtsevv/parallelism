@@ -52,7 +52,7 @@ void parallel_matrix_operation(int size, int nthreads, void (*row_operation)(int
     }
 }
 
-#иниц элементов матрицы
+// иниц элементов матрицы
 void init_row(int i, int size, double* a, double* b, double* c) {
     for (int j = 0; j < size; j++) {
         a[i * size + j] = i + j;
@@ -60,7 +60,7 @@ void init_row(int i, int size, double* a, double* b, double* c) {
     c[i] = 0.0;
 }
 
-#умножение строки на вектор
+// умножение строки на вектор
 void matvec_row(int i, int size, double* a, double* b, double* c) {
     c[i] = 0;
     for (int j = 0; j < size; j++) {
