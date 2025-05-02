@@ -44,7 +44,13 @@ void parallel_matrix_operation(int size, int nthreads, void (*row_operation)(int
         int tid = omp_get_thread_num();
         int items_per_thread = size / nthreads;
         int lb = tid * items_per_thread;
-        int ub = (tid == nthreads - 1) ? (size - 1) : (lb + items_per_thread - 1);
+        int ub;
+        
+        if (tid == nthreads - 1) { 
+            ub = size - 1;
+        } else { 
+            ub = lb + items_per_thread - 1);
+        }
         
         for (int i = lb; i <= ub; i++) {
             row_operation(i, size, a, b, c);
