@@ -29,11 +29,6 @@ void print_system_info() {
     printf("\n=========================\n");
 }
 
-void fatal(char *message) {
-    fprintf(stderr, "%s", message);
-    exit(13);
-}
-
 void *safe_malloc(size_t size) {
     void* ptr = malloc(size);
     if (ptr == NULL) {
@@ -43,63 +38,58 @@ void *safe_malloc(size_t size) {
     return ptr;
 }
 
-double cpuSecond() {
-    struct timespec ts;
-    timespec_get(&ts, TIME_UTC);
-    return ((double)ts.tv_sec + (double)ts.tv_nsec * 1.e-9);
-}
-
-void matrix_vector_product_omp(double *a, double *b, double *c, int m, int n, int nthreads) {
+void parallel_matrix_operation(int size, int nthreads, void (*row_operation)(int, int, double*, double*, double*), double* a, double* b, double* c) {
     #pragma omp parallel num_threads(nthreads)
     {
         int tid = omp_get_thread_num();
-        int items_per_thread = m / nthreads; 
+        int items_per_thread = size / nthreads;
         int lb = tid * items_per_thread;
-        int ub = (tid == nthreads - 1) ? (m - 1) : (lb + items_per_thread - 1);
-
+        int ub = (tid == nthreads - 1) ? (size - 1) : (lb + items_per_thread - 1);
+        
         for (int i = lb; i <= ub; i++) {
-            c[i] = 0;
-            for (int j = 0; j < n; j++) {
-                c[i] += a[i * m + j] * b[j];
-            }
+            row_operation(i, size, a, b, c);
         }
     }
 }
 
-double time_check_parallel(int matrix_size, int nthreads) {
+void init_row(int i, int size, double* a, double* b, double* c) {
+    for (int j = 0; j < size; j++) {
+        a[i * size + j] = i + j;
+    }
+    c[i] = 0.0;
+}
+
+void matvec_row(int i, int size, double* a, double* b, double* c) {
+    c[i] = 0;
+    for (int j = 0; j < size; j++) {
+        c[i] += a[i * size + j] * b[j];
+    }
+}
+
+double benchmark_matrix_mult(int matrix_size, int nthreads) {
     double *a = safe_malloc(sizeof(*a) * matrix_size * matrix_size);
     double *b = safe_malloc(sizeof(*b) * matrix_size);
     double *c = safe_malloc(sizeof(*c) * matrix_size);
 
-    #pragma omp parallel num_threads(nthreads)
-    {
-        int tid = omp_get_thread_num();
-        int items_per_thread = matrix_size / nthreads;
-        int lb = tid * items_per_thread;
-        int ub = (tid == nthreads - 1) ? (matrix_size - 1) : (lb + items_per_thread - 1);
-        
-        for (int i = lb; i <= ub; i++) {
-            for (int j = 0; j < matrix_size; j++)
-                a[i * matrix_size + j] = i + j;
-            c[i] = 0.0;
-        }
-    }
+    parallel_matrix_operation(matrix_size, nthreads, init_row, a, b, c);
     
-    for (int j = 0; j < matrix_size; j++)
+    for (int j = 0; j < matrix_size; j++) {
         b[j] = j;
+    }
 
     double min_time = 1e10;
     for (int i = 0; i < 5; i++) {
-        double start = cpuSecond();
-        matrix_vector_product_omp(a, b, c, matrix_size, matrix_size, nthreads);
-        double stop = cpuSecond();
-        min_time = (min_time < (stop - start)) ? min_time : (stop - start);
+        struct timespec start, end;
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        
+        parallel_matrix_operation(matrix_size, nthreads, matvec_row, a, b, c);
+        
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        double elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+        min_time = elapsed < min_time ? elapsed : min_time;
     }
 
-    free(a);
-    free(b);
-    free(c);
-    
+    free(a); free(b); free(c);
     return min_time;
 }
 
@@ -114,7 +104,7 @@ void run_scalability_test(int matrix_size) {
     printf("|---------|------------|---------|\n");
     
     for (int i = 0; i < num_tests; i++) {
-        double time = time_check_parallel(matrix_size, thread_counts[i]);
+        double time = benchmark_matrix_mult(matrix_size, thread_counts[i]);
         
         if (thread_counts[i] == 1) {
             base_time = time;
