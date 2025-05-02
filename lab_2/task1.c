@@ -34,10 +34,13 @@ void fatal(char *message) {
     exit(13);
 }
 
-void *xmalloc(size_t size) {
-    register void *value = malloc(size);
-    if (value == 0) fatal("Virtual memory exhausted");
-    return value;
+void *safe_malloc(size_t size) {
+    void* ptr = malloc(size);
+    if (ptr == NULL) {
+        fprinf(stderr, "error! memory could not be allocated");
+        abort;
+    }
+    return ptr;
 }
 
 double cpuSecond() {
@@ -64,11 +67,9 @@ void matrix_vector_product_omp(double *a, double *b, double *c, int m, int n, in
 }
 
 double time_check_parallel(int matrix_size, int nthreads) {
-    double *a, *b, *c;
-
-    a = xmalloc(sizeof(*a) * matrix_size * matrix_size);
-    b = xmalloc(sizeof(*b) * matrix_size);
-    c = xmalloc(sizeof(*c) * matrix_size);
+    double *a = safe_malloc(sizeof(*a) * matrix_size * matrix_size);
+    double *b = safe_malloc(sizeof(*b) * matrix_size);
+    double *c = safe_malloc(sizeof(*c) * matrix_size);
 
     #pragma omp parallel num_threads(nthreads)
     {
